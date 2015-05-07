@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/binary"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -11,10 +13,12 @@ import (
 	"code.google.com/p/go-uuid/uuid"
 	"github.com/boltdb/bolt"
 	"github.com/labstack/echo"
+	"github.com/ugorji/go/codec"
 )
 
 var dbs map[string]*bolt.DB = make(map[string]*bolt.DB)
 var rootDir string
+var jh codec.Handle = new(codec.JsonHandle)
 
 func dbFileName(name string) string {
 	return fmt.Sprintf("%s/%s.db", rootDir, name)
@@ -72,9 +76,80 @@ func Query(c *echo.Context) {
 }
 
 func InsertDoc(c *echo.Context) {
-	body, _ := ioutil.ReadAll(c.Request.Body)
-	uuid := uuid.NewUUID()
-	c.String(http.StatusOK, fmt.Sprintf("InsertDoc %s:%s:%s:%s", c.Param("db"), c.Param("collection"), uuid, body))
+	db, err := getDb(c.Param("db"))
+	if err != nil {
+		badRequest(c, "Error retrieving db:", err)
+		return
+	}
+
+	// decode the document
+	var doc map[string]interface{}
+	err = codec.NewDecoder(c.Request.Body, jh).Decode(&doc)
+	if err != nil {
+		badRequest(c, "Error decoding your document", err)
+		return
+	}
+
+	// add the id
+	id := uuid.NewUUID()
+	doc["_id"] = id.String()
+	lookupId := new(bytes.Buffer)
+	time, ok := id.Time()
+	if ok != true {
+		badRequest(c, "Error building time from uuid", err)
+		return
+	}
+	binary.Write(lookupId, binary.BigEndian, time)
+	binary.Write(lookupId, binary.BigEndian, id)
+
+	// encode the document
+	encDoc := new(bytes.Buffer)
+	err = codec.NewEncoder(encDoc, jh).Encode(doc)
+	if err != nil {
+		badRequest(c, "Error encoding your document", err)
+		return
+	}
+
+	err = db.Update(func(tx *bolt.Tx) error {
+		bucket, err := tx.CreateBucketIfNotExists([]byte(c.Param("collection")))
+		if err != nil {
+			return err
+		}
+		return bucket.Put(lookupId.Bytes(), encDoc.Bytes())
+	})
+	if err != nil {
+		badRequest(c, "Error inserting your document", err)
+		return
+	}
+
+	c.String(http.StatusOK, fmt.Sprintf("InsertDoc %s:%s:%s", c.Param("db"), c.Param("collection"), encDoc))
+}
+
+func FindDoc(c *echo.Context) {
+	db, err := getDb(c.Param("db"))
+	if err != nil {
+		badRequest(c, "Error retrieving db:", err)
+		return
+	}
+
+	id := uuid.Parse(c.Param("id"))
+	lookupId := new(bytes.Buffer)
+	time, ok := id.Time()
+	if ok != true {
+		badRequest(c, "Error building time from uuid", err)
+		return
+	}
+	binary.Write(lookupId, binary.BigEndian, time)
+	binary.Write(lookupId, binary.BigEndian, id)
+
+	var doc []byte
+	err = db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte(c.Param("collection")))
+		doc = bucket.Get(lookupId.Bytes())
+		return nil
+	})
+
+	c.String(http.StatusOK, fmt.Sprintf("FindDoc %s:%s:%s:%s", c.Param("db"), c.Param("collection"), id, doc))
 }
 
 func DeleteDoc(c *echo.Context) {
@@ -94,6 +169,7 @@ func start(bind string) {
 	// Documents
 	e.Get("/:db/:collection", Query)
 	e.Post("/:db/:collection", InsertDoc)
+	e.Get("/:db/:collection/:id", FindDoc)
 	e.Delete("/:db/:collection/:id", DeleteDoc)
 
 	e.Run(bind)
