@@ -70,6 +70,24 @@ func insertDoc(dbName string, collection string, docReader io.Reader) (*bytes.Bu
 	return encDoc, err
 }
 
+func query(dbName string, collection string) ([]byte, error) {
+	db, err := getDb(dbName)
+	if err != nil {
+		return nil, err
+	}
+
+	var docs []byte
+	err = db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte(collection))
+		c := bucket.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			docs = append(docs, v...)
+		}
+		return nil
+	})
+	return docs, err
+}
+
 func findDoc(dbName string, collection string, id string) ([]byte, error) {
 	db, err := getDb(dbName)
 	if err != nil {

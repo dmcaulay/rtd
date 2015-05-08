@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net/http"
 
 	"github.com/labstack/echo"
@@ -44,8 +43,12 @@ func Delete(c *echo.Context) {
 }
 
 func Query(c *echo.Context) {
-	body, _ := ioutil.ReadAll(c.Request.Body)
-	c.String(http.StatusOK, fmt.Sprintf("Query %s:%s:%s", c.Param("db"), c.Param("collection"), body))
+	docs, err := query(c.Param("db"), c.Param("collection"))
+	if err != nil {
+		badRequest(c, "Error querying collection", err)
+	} else {
+		okWithBody(c, docs)
+	}
 }
 
 func InsertDoc(c *echo.Context) {
