@@ -174,7 +174,47 @@ func valueMatch(docV interface{}, queryV interface{}) bool {
 		return queryMatch(docObj, vObj)
 	}
 
+	// slice
+	vSlice, vOk := queryV.([]interface{})
+	docSlice, docOk := docV.([]interface{})
+	if vOk && docOk {
+		return sliceMatch(docSlice, vSlice)
+	}
+	if vOk {
+		return sliceMatchValue(vSlice, docV, true)
+	}
+	if docOk {
+		return sliceMatchValue(docSlice, queryV, false)
+	}
+
 	// not comparable
+	return false
+}
+
+func sliceMatch(docSlice []interface{}, vSlice []interface{}) bool {
+	if len(vSlice) != len(docSlice) {
+		return false
+	}
+	for i, v := range vSlice {
+		if !valueMatch(docSlice[i], v) {
+			return false
+		}
+	}
+	return true
+}
+
+func sliceMatchValue(slice []interface{}, value interface{}, sliceQuery bool) bool {
+	for _, v := range slice {
+		if sliceQuery {
+			if valueMatch(value, v) {
+				return true
+			}
+		} else {
+			if valueMatch(v, value) {
+				return true
+			}
+		}
+	}
 	return false
 }
 
