@@ -43,7 +43,7 @@ func Delete(c *echo.Context) {
 }
 
 func Query(c *echo.Context) {
-	docs, err := query(c.Param("db"), c.Param("collection"))
+	docs, err := query(c.Param("db"), c.Param("collection"), c.Request.Body)
 	if err != nil {
 		badRequest(c, "Error querying collection", err)
 	} else {

@@ -24,7 +24,7 @@ func parseId(strId string) (*bytes.Buffer, error) {
 
 func buildLookupId(id uuid.UUID) (*bytes.Buffer, error) {
 	time, ok := id.Time()
-	if ok != true {
+	if !ok {
 		return nil, errors.New("Error retrieving time from UUID")
 	}
 	lookupId := new(bytes.Buffer)
