@@ -77,12 +77,12 @@ func query(dbName string, collection string, queryReader io.Reader) ([]byte, err
 		return nil, err
 	}
 
-	query, err := decodeJson(queryReader)
+	queryMap, err := decodeJson(queryReader)
 	if err != nil {
 		return nil, err
 	}
 
-	id, ok := query["_id"]
+	id, ok := queryMap["_id"]
 	if ok {
 		return findDoc(dbName, collection, id.(string))
 	}
@@ -96,10 +96,8 @@ func query(dbName string, collection string, queryReader io.Reader) ([]byte, err
 			if err != nil {
 				return err
 			}
-			if queryMatch(doc, query) {
+			if queryMatch(doc, queryMap) {
 				docs = append(docs, v...)
-			} else if err != nil {
-				return err
 			}
 		}
 		return nil
@@ -127,91 +125,60 @@ func findDoc(dbName string, collection string, id string) ([]byte, error) {
 	return doc, err
 }
 
-func queryMatch(doc map[string]interface{}, query map[string]interface{}) bool {
-	for k, v := range query {
+func queryMatch(doc map[interface{}]interface{}, query map[interface{}]interface{}) bool {
+	for k, queryV := range query {
 		docV, ok := doc[k]
 		if !ok {
 			return false
 		}
-
-		// bool
-		vBool, vOk := v.(bool)
-		docBool, docOk := docV.(bool)
-		if vOk && docOk {
-			if vBool == docBool {
-				continue
-			}
+		if !valueMatch(docV, queryV) {
 			return false
 		}
-
-		// uint64
-		vInt, vOk := v.(uint64)
-		docInt, docOk := docV.(uint64)
-		if vOk && docOk {
-			if vInt == docInt {
-				continue
-			}
-			return false
-		}
-
-		// float64
-		vFloat, vOk := v.(float64)
-		docFloat, docOk := docV.(float64)
-		if vOk && docOk {
-			if vFloat == docFloat {
-				continue
-			}
-			return false
-		}
-
-		// string
-		vStr, vOk := v.(string)
-		docStr, docOk := docV.(string)
-		if vOk && docOk {
-			if vStr == docStr {
-				continue
-			}
-			return false
-		}
-
-		// nested
-		vObj, vOk := v.(map[string]interface{})
-		docObj, docOk := docV.(map[string]interface{})
-		if vOk && docOk {
-			fmt.Println("nested!")
-			if queryMatch(docObj, vObj) {
-				continue
-			}
-			return false
-		}
-
-		return false
 	}
 	return true
-	// switch values := [2]interface{}{v, docV}.(type) {
-	// default:
-	// 	return false
-	// case [2]map[string]interface{}:
-	// 	eq, err := queryMatch(values[0], values[1])
-	// 	if err != nil || !eq {
-	// 		return eq, err
-	// 	}
-	// case [2]bool:
-	// 	if values[0] != values[1] {
-	// 		return false
-	// 	}
-	// case [2]float64:
-	// 	if values[0] != values[1] {
-	// 		return false
-	// 	}
-	// case [2]string:
-	// 	if values[0] != values[1] {
-	// 		return false
-	// 	}
-	// }
 }
 
-func decodeJson(data interface{}) (map[string]interface{}, error) {
+func valueMatch(docV interface{}, queryV interface{}) bool {
+	// bool
+	vBool, vOk := queryV.(bool)
+	docBool, docOk := docV.(bool)
+	if vOk && docOk {
+		return vBool == docBool
+	}
+
+	// uint64
+	vInt, vOk := queryV.(uint64)
+	docInt, docOk := docV.(uint64)
+	if vOk && docOk {
+		return vInt == docInt
+	}
+
+	// float64
+	vFloat, vOk := queryV.(float64)
+	docFloat, docOk := docV.(float64)
+	if vOk && docOk {
+		return vFloat == docFloat
+	}
+
+	// string
+	vStr, vOk := queryV.(string)
+	docStr, docOk := docV.(string)
+	if vOk && docOk {
+		return vStr == docStr
+	}
+
+	// object
+	vObj, vOk := queryV.(map[interface{}]interface{})
+	docObj, docOk := docV.(map[interface{}]interface{})
+	if vOk && docOk {
+		return queryMatch(docObj, vObj)
+	}
+
+	// not comparable
+	return false
+}
+
+func decodeJson(data interface{}) (map[interface{}]interface{}, error) {
 	var decoder *codec.Decoder
 	switch data := data.(type) {
 	default:
@@ -222,12 +189,12 @@ func decodeJson(data interface{}) (map[string]interface{}, error) {
 		decoder = codec.NewDecoderBytes(data, jh)
 	}
 
-	var doc map[string]interface{}
+	var doc map[interface{}]interface{}
 	err := decoder.Decode(&doc)
 	return doc, err
 }
 
-func encodeDoc(doc map[string]interface{}) (*bytes.Buffer, error) {
+func encodeDoc(doc map[interface{}]interface{}) (*bytes.Buffer, error) {
 	encDoc := new(bytes.Buffer)
 	err := codec.NewEncoder(encDoc, jh).Encode(doc)
 	return encDoc, err
