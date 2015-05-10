@@ -50,11 +50,24 @@ func insertDoc(dbName string, collection string, docReader io.Reader) (*bytes.Bu
 		return nil, err
 	}
 
-	id, lookupId, err := newId()
-	if err != nil {
-		return nil, err
+	id, ok := doc["_id"]
+	var lookupId *bytes.Buffer
+	if !ok {
+		id, lookupId, err = newId()
+		if err != nil {
+			return nil, err
+		}
+		doc["_id"] = id
+	} else {
+		id, ok := id.(string)
+		if !ok {
+			return nil, errors.New("ID must be a string UUID")
+		}
+		lookupId, err = parseId(id)
+		if err != nil {
+			return nil, err
+		}
 	}
-	doc["_id"] = id
 
 	encDoc, err := encodeDoc(doc)
 	if err != nil {
@@ -69,6 +82,48 @@ func insertDoc(dbName string, collection string, docReader io.Reader) (*bytes.Bu
 		return bucket.Put(lookupId.Bytes(), encDoc.Bytes())
 	})
 	return encDoc, err
+}
+
+func updateDoc(dbName string, collection string, id string, updateReader io.Reader) (*bytes.Buffer, error) {
+	db, err := getDb(dbName)
+	if err != nil {
+		return nil, err
+	}
+
+	update, err := decodeJson(updateReader)
+	if err != nil {
+		return nil, err
+	}
+
+	lookupId, err := parseId(id)
+	if err != nil {
+		return nil, err
+	}
+
+	var encDoc *bytes.Buffer
+	err = db.Update(func(tx *bolt.Tx) error {
+		bucket, err := tx.CreateBucketIfNotExists([]byte(collection))
+		if err != nil {
+			return err
+		}
+		originalDoc := bucket.Get(lookupId.Bytes())
+		doc, err := decodeJson(originalDoc)
+
+		for k, v := range update {
+			if k == "_id" && v != id {
+				return errors.New("Can't update ID on update")
+			}
+			doc[k] = v
+		}
+
+		encDoc, err = encodeDoc(doc)
+		if err != nil {
+			return err
+		}
+		return bucket.Put(lookupId.Bytes(), encDoc.Bytes())
+	})
+	return encDoc, err
+
 }
 
 func query(dbName string, collection string, queryReader io.Reader) ([]byte, error) {

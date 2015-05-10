@@ -8,7 +8,7 @@ import (
 )
 
 func badRequest(c *echo.Context, description string, err error) {
-	c.String(http.StatusBadRequest, fmt.Sprintf("%s: %s\n", description, err))
+	c.String(http.StatusBadRequest, fmt.Sprintf("%s: %s", description, err))
 }
 
 func ok(c *echo.Context) {
@@ -69,6 +69,15 @@ func FindDoc(c *echo.Context) {
 	}
 }
 
+func UpdateDoc(c *echo.Context) {
+	doc, err := updateDoc(c.Param("db"), c.Param("collection"), c.Param("id"), c.Request.Body)
+	if err != nil {
+		badRequest(c, "Error updating document", err)
+	} else {
+		okWithBody(c, doc.Bytes())
+	}
+}
+
 func DeleteDoc(c *echo.Context) {
 	c.String(http.StatusOK, fmt.Sprintf("DeleteDoc %s:%s:%s", c.Param("db"), c.Param("collection"), c.Param("id")))
 }
@@ -87,6 +96,7 @@ func StartHttp(bind string) {
 	e.Get("/:db/:collection", Query)
 	e.Post("/:db/:collection", InsertDoc)
 	e.Get("/:db/:collection/:id", FindDoc)
+	e.Put("/:db/:collection/:id", UpdateDoc)
 	e.Delete("/:db/:collection/:id", DeleteDoc)
 
 	e.Run(bind)
