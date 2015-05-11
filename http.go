@@ -51,6 +51,15 @@ func Query(c *echo.Context) {
 	}
 }
 
+func UpdateQuery(c *echo.Context) {
+	docs, err := updateQuery(c.Param("db"), c.Param("collection"), c.Request.Body)
+	if err != nil {
+		badRequest(c, "Error updating collection", err)
+	} else {
+		okWithBody(c, docs)
+	}
+}
+
 func InsertDoc(c *echo.Context) {
 	insertedDoc, err := insertDoc(c.Param("db"), c.Param("collection"), c.Request.Body)
 	if err != nil {
@@ -74,7 +83,7 @@ func UpdateDoc(c *echo.Context) {
 	if err != nil {
 		badRequest(c, "Error updating document", err)
 	} else {
-		okWithBody(c, doc.Bytes())
+		okWithBody(c, doc)
 	}
 }
 
@@ -94,6 +103,7 @@ func StartHttp(bind string) {
 
 	// Documents
 	e.Get("/:db/:collection", Query)
+	e.Put("/:db/:collection", UpdateQuery)
 	e.Post("/:db/:collection", InsertDoc)
 	e.Get("/:db/:collection/:id", FindDoc)
 	e.Put("/:db/:collection/:id", UpdateDoc)
