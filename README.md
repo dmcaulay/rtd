@@ -10,19 +10,19 @@ rtd is a side project and has not been used in production.
 
 ## Install
 
-Install the database.
+The database.
 
 ```
 $ go get github.com/dmcaulay/rtd
 ```
 
-Install the command line tool
+The command line tool
 
 ```
 $ npm install -g rtdctl
 ```
 
-## Running
+## Run
 
 Start rtd with a data directory.
 
@@ -30,22 +30,23 @@ Start rtd with a data directory.
 $ rtd -dir=/data/dir
 ```
 
-## Accesssing
+## Usage
 
-Start rtdctl or use curl.
+rtdctl
 
-```
+``` js
 $ rtdctl
-```
-
-### Selecting the DB
-
-```
 rtdctl> use('blog')
-```
-
-### Inserting
-
-```
 rtdctl> db.posts.insert({hello: 'world'})
+=> { hello: 'world', _id: 'dd4f6107-f77b-11e4-befe-406c8f1dca7a' }
+rtdctl> db.posts.find({hello: 'world'})
+=> { hello: 'world', _id: 'dd4f6107-f77b-11e4-befe-406c8f1dca7a' }
+rtdctl> db.posts.findById('dd4f6107-f77b-11e4-befe-406c8f1dca7a')
+=> { hello: 'world', _id: 'dd4f6107-f77b-11e4-befe-406c8f1dca7a' }
+rtdctl> db.posts.insert({title: 'golang is awesome', author: 'dmcaulay'})
+=> { title: 'golang is awesome', author: 'dmcaulay', _id: '0fae3410-f788-11e4-befe-406c8f1dca7a' }
+rtdctl> db.posts.find()
+=> [ { hello: 'world', _id: 'dd4f6107-f77b-11e4-befe-406c8f1dca7a'}, { title: 'golang is awesome', author: 'dmcaulay', _id: '0fae3410-f788-11e4-befe-406c8f1dca7a' } ]
+rtdctl> db.posts.update('0fae3410-f788-11e4-befe-406c8f1dca7a', {title: 'golang is fun'})
+=> { title: 'golang is fun', author: 'dmcaulay', _id: '0fae3410-f788-11e4-befe-406c8f1dca7a' }
 ```
