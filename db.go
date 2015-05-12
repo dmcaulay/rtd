@@ -319,6 +319,11 @@ func readCollection(dbName string, collection string, handler BucketHandler) err
 func iterateQuery(db string, collection string, query map[interface{}]interface{}, tx TransactionFunc, handler QueryHandler) error {
 	return tx(db, collection, func(bucket *bolt.Bucket) error {
 		c := bucket.Cursor()
+		var count uint64 = 0
+		limit, useLimit := query["limit"].(uint64)
+		if useLimit {
+			delete(query, "limit")
+		}
 		for k, v := c.First(); k != nil; k, v = c.Next() {
 			doc, err := decodeJson(v)
 			if err != nil {
@@ -328,6 +333,10 @@ func iterateQuery(db string, collection string, query map[interface{}]interface{
 				err = handler(bucket, k, v, doc)
 				if err != nil {
 					return err
+				}
+				count++
+				if useLimit && count == limit {
+					return nil
 				}
 			}
 		}
