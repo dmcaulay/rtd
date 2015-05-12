@@ -47,6 +47,8 @@ rtdctl> db.posts.insert({title: 'golang is awesome', author: 'dmcaulay'})
 => { title: 'golang is awesome', author: 'dmcaulay', _id: '0fae3410-f788-11e4-befe-406c8f1dca7a' }
 rtdctl> db.posts.find()
 => [ { hello: 'world', _id: 'dd4f6107-f77b-11e4-befe-406c8f1dca7a'}, { title: 'golang is awesome', author: 'dmcaulay', _id: '0fae3410-f788-11e4-befe-406c8f1dca7a' } ]
-rtdctl> db.posts.update('0fae3410-f788-11e4-befe-406c8f1dca7a', {title: 'golang is fun'})
+rtdctl> db.posts.updateById('0fae3410-f788-11e4-befe-406c8f1dca7a', {title: 'golang is fun'})
+=> { title: 'golang is fun', author: 'dmcaulay', _id: '0fae3410-f788-11e4-befe-406c8f1dca7a' }
+rtdctl> db.posts.update({author: 'dmcaulay'}, {title: 'update by query'})
 => { title: 'golang is fun', author: 'dmcaulay', _id: '0fae3410-f788-11e4-befe-406c8f1dca7a' }
 ```
