@@ -1,0 +1,34 @@
+{
+	"ImportPath": "github.com/dmcaulay/rtd",
+	"GoVersion": "go1.4.2",
+	"Deps": [
+		{
+			"ImportPath": "code.google.com/p/go-uuid/uuid",
+			"Comment": "null-15",
+			"Rev": "35bc42037350f0078e3c974c6ea690f1926603ab"
+		},
+		{
+			"ImportPath": "github.com/boltdb/bolt",
+			"Comment": "v1.0-74-g550b8c7",
+			"Rev": "550b8c7cb64d61665aefda8dd52ad8c34e725be5"
+		},
+		{
+			"ImportPath": "github.com/labstack/echo",
+			"Comment": "v0.0.11-12-gab1e479",
+			"Rev": "ab1e479adac1bde81caf6f7ee895de16a977596f"
+		},
+		{
+			"ImportPath": "github.com/labstack/gommon/color",
+			"Comment": "v0.0.1-6-g689263a",
+			"Rev": "689263a45deefb73a1966a5572526678af838695"
+		},
+		{
+			"ImportPath": "github.com/mattn/go-colorable",
+			"Rev": "d67e0b7d1797975196499f79bcc322c08b9f218b"
+		},
+		{
+			"ImportPath": "github.com/ugorji/go/codec",
+			"Rev": "3bf34b310f3f1eef0e3981ddf6f6c79e2b907b02"
+		}
+	]
+}
