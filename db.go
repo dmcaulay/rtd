@@ -11,6 +11,12 @@ import (
 	"github.com/ugorji/go/codec"
 )
 
+type (
+	BucketHandler   func(*bolt.Bucket) error
+	QueryHandler    func(*bolt.Bucket, []byte, []byte, map[interface{}]interface{}) error
+	TransactionFunc func(string, string, BucketHandler) error
+)
+
 var jh codec.Handle = new(codec.JsonHandle)
 
 func dbFileName(name string) string {
@@ -39,12 +45,7 @@ func deleteDb(name string) error {
 	return os.Remove(dbFileName(name))
 }
 
-func insertDoc(dbName string, collection string, docReader io.Reader) (*bytes.Buffer, error) {
-	db, err := getDb(dbName)
-	if err != nil {
-		return nil, err
-	}
-
+func insertDoc(db string, collection string, docReader io.Reader) (*bytes.Buffer, error) {
 	doc, err := decodeJson(docReader)
 	if err != nil {
 		return nil, err
@@ -74,22 +75,13 @@ func insertDoc(dbName string, collection string, docReader io.Reader) (*bytes.Bu
 		return nil, err
 	}
 
-	err = db.Update(func(tx *bolt.Tx) error {
-		bucket, err := tx.CreateBucketIfNotExists([]byte(collection))
-		if err != nil {
-			return err
-		}
+	err = updateCollection(db, collection, func(bucket *bolt.Bucket) error {
 		return bucket.Put(lookupId.Bytes(), encDoc.Bytes())
 	})
 	return encDoc, err
 }
 
-func updateDoc(dbName string, collection string, id string, updateReader io.Reader) (*bytes.Buffer, error) {
-	db, err := getDb(dbName)
-	if err != nil {
-		return nil, err
-	}
-
+func updateDoc(db string, collection string, id string, updateReader interface{}) ([]byte, error) {
 	update, err := decodeJson(updateReader)
 	if err != nil {
 		return nil, err
@@ -101,37 +93,18 @@ func updateDoc(dbName string, collection string, id string, updateReader io.Read
 	}
 
 	var encDoc *bytes.Buffer
-	err = db.Update(func(tx *bolt.Tx) error {
-		bucket, err := tx.CreateBucketIfNotExists([]byte(collection))
-		if err != nil {
-			return err
-		}
+	err = updateCollection(db, collection, func(bucket *bolt.Bucket) error {
 		originalDoc := bucket.Get(lookupId.Bytes())
-		doc, err := decodeJson(originalDoc)
-
-		for k, v := range update {
-			if k == "_id" && v != id {
-				return errors.New("Can't update ID on update")
-			}
-			doc[k] = v
-		}
-
-		encDoc, err = encodeDoc(doc)
+		encDoc, err = updateDocValue(originalDoc, update, bucket)
 		if err != nil {
 			return err
 		}
 		return bucket.Put(lookupId.Bytes(), encDoc.Bytes())
 	})
-	return encDoc, err
-
+	return encDoc.Bytes(), err
 }
 
-func query(dbName string, collection string, queryReader io.Reader) ([]byte, error) {
-	db, err := getDb(dbName)
-	if err != nil {
-		return nil, err
-	}
-
+func query(db string, collection string, queryReader io.Reader) ([]byte, error) {
 	queryMap, err := decodeJson(queryReader)
 	if err != nil {
 		return nil, err
@@ -139,45 +112,88 @@ func query(dbName string, collection string, queryReader io.Reader) ([]byte, err
 
 	id, ok := queryMap["_id"]
 	if ok {
-		return findDoc(dbName, collection, id.(string))
+		return findDoc(db, collection, id.(string))
 	}
 
 	var docs []byte
-	err = db.View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(collection))
-		c := bucket.Cursor()
-		for k, v := c.First(); k != nil; k, v = c.Next() {
-			doc, err := decodeJson(v)
-			if err != nil {
-				return err
-			}
-			if queryMatch(doc, queryMap) {
-				docs = append(docs, v...)
-			}
-		}
+	err = iterateQuery(db, collection, queryMap, readCollection, func(bucket *bolt.Bucket, key []byte, value []byte, doc map[interface{}]interface{}) error {
+		docs = append(docs, value...)
 		return nil
 	})
 	return docs, err
 }
 
-func findDoc(dbName string, collection string, id string) ([]byte, error) {
-	db, err := getDb(dbName)
+func updateQuery(db string, collection string, queryReader io.Reader) ([]byte, error) {
+	updateMap, err := decodeJson(queryReader)
 	if err != nil {
 		return nil, err
 	}
 
+	queryMap, ok := updateMap["query"].(map[interface{}]interface{})
+	if !ok {
+		return nil, errors.New("Cannot update without a query")
+	}
+
+	update, ok := updateMap["update"].(map[interface{}]interface{})
+	if !ok {
+		return nil, errors.New("Cannot update without an update object")
+	}
+
+	id, ok := queryMap["_id"]
+	if ok {
+		return updateDoc(db, collection, id.(string), update)
+	}
+
+	var docs []byte
+	err = iterateQuery(db, collection, queryMap, updateCollection, func(bucket *bolt.Bucket, key []byte, value []byte, doc map[interface{}]interface{}) error {
+		updated, err := updateDocValue(value, update, bucket)
+		if err != nil {
+			return err
+		}
+
+		err = bucket.Put(key, updated.Bytes())
+		if err != nil {
+			return err
+		}
+		docs = append(docs, updated.Bytes()...)
+		return nil
+	})
+	return docs, err
+}
+
+func findDoc(db string, collection string, id string) ([]byte, error) {
 	lookupId, err := parseId(id)
 	if err != nil {
 		return nil, err
 	}
 
 	var doc []byte
-	err = db.View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(collection))
+	err = readCollection(db, collection, func(bucket *bolt.Bucket) error {
 		doc = bucket.Get(lookupId.Bytes())
 		return nil
 	})
 	return doc, err
+}
+
+func updateDocValue(originalDoc []byte, update map[interface{}]interface{}, bucket *bolt.Bucket) (*bytes.Buffer, error) {
+	doc, err := decodeJson(originalDoc)
+	if err != nil {
+		return nil, err
+	}
+
+	for k, v := range update {
+		if k == "_id" {
+			return nil, errors.New("Can't update ID on update")
+		}
+		doc[k] = v
+	}
+
+	encDoc, err := encodeDoc(doc)
+	if err != nil {
+		return nil, err
+	}
+
+	return encDoc, err
 }
 
 func queryMatch(doc map[interface{}]interface{}, query map[interface{}]interface{}) bool {
@@ -273,6 +289,52 @@ func sliceMatchValue(slice []interface{}, value interface{}, sliceQuery bool) bo
 	return false
 }
 
+func updateCollection(dbName string, collection string, handler BucketHandler) error {
+	db, err := getDb(dbName)
+	if err != nil {
+		return err
+	}
+
+	return db.Update(func(tx *bolt.Tx) error {
+		bucket, err := tx.CreateBucketIfNotExists([]byte(collection))
+		if err != nil {
+			return err
+		}
+		return handler(bucket)
+	})
+}
+
+func readCollection(dbName string, collection string, handler BucketHandler) error {
+	db, err := getDb(dbName)
+	if err != nil {
+		return err
+	}
+
+	return db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte(collection))
+		return handler(bucket)
+	})
+}
+
+func iterateQuery(db string, collection string, query map[interface{}]interface{}, tx TransactionFunc, handler QueryHandler) error {
+	return tx(db, collection, func(bucket *bolt.Bucket) error {
+		c := bucket.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			doc, err := decodeJson(v)
+			if err != nil {
+				return err
+			}
+			if queryMatch(doc, query) {
+				err = handler(bucket, k, v, doc)
+				if err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	})
+}
+
 func decodeJson(data interface{}) (map[interface{}]interface{}, error) {
 	var decoder *codec.Decoder
 	switch data := data.(type) {
@@ -282,6 +344,8 @@ func decodeJson(data interface{}) (map[interface{}]interface{}, error) {
 		decoder = codec.NewDecoder(data, jh)
 	case []byte:
 		decoder = codec.NewDecoderBytes(data, jh)
+	case map[interface{}]interface{}:
+		return data, nil
 	}
 
 	var doc map[interface{}]interface{}
