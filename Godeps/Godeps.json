@@ -13,6 +13,10 @@
 			"Rev": "550b8c7cb64d61665aefda8dd52ad8c34e725be5"
 		},
 		{
+			"ImportPath": "github.com/hooklift/assert",
+			"Rev": "c7786599453421cddf9aa8a3a7b537f567d1ac1b"
+		},
+		{
 			"ImportPath": "github.com/labstack/echo",
 			"Comment": "v0.0.11-12-gab1e479",
 			"Rev": "ab1e479adac1bde81caf6f7ee895de16a977596f"
