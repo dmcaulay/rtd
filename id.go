@@ -8,7 +8,7 @@ import (
 	"code.google.com/p/go-uuid/uuid"
 )
 
-func newId() (string, *bytes.Buffer, error) {
+func NewId() (string, []byte, error) {
 	id := uuid.NewUUID()
 	lookupId, err := buildLookupId(id)
 	if err != nil {
@@ -17,18 +17,18 @@ func newId() (string, *bytes.Buffer, error) {
 	return id.String(), lookupId, nil
 }
 
-func parseId(strId string) (*bytes.Buffer, error) {
+func ParseId(strId string) ([]byte, error) {
 	id := uuid.Parse(strId)
 	return buildLookupId(id)
 }
 
-func buildLookupId(id uuid.UUID) (*bytes.Buffer, error) {
+func buildLookupId(id uuid.UUID) ([]byte, error) {
 	time, ok := id.Time()
 	if !ok {
 		return nil, errors.New("Error retrieving time from UUID")
 	}
-	lookupId := new(bytes.Buffer)
-	binary.Write(lookupId, binary.BigEndian, time)
-	binary.Write(lookupId, binary.BigEndian, id)
-	return lookupId, nil
+	writer := new(bytes.Buffer)
+	binary.Write(writer, binary.BigEndian, time)
+	binary.Write(writer, binary.BigEndian, id)
+	return writer.Bytes(), nil
 }

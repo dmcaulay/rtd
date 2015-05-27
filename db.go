@@ -52,9 +52,9 @@ func insertDoc(db string, collection string, docReader io.Reader) (*bytes.Buffer
 	}
 
 	id, ok := doc["_id"]
-	var lookupId *bytes.Buffer
+	var lookupId []byte
 	if !ok {
-		id, lookupId, err = newId()
+		id, lookupId, err = NewId()
 		if err != nil {
 			return nil, err
 		}
@@ -64,7 +64,7 @@ func insertDoc(db string, collection string, docReader io.Reader) (*bytes.Buffer
 		if !ok {
 			return nil, errors.New("ID must be a string UUID")
 		}
-		lookupId, err = parseId(id)
+		lookupId, err = ParseId(id)
 		if err != nil {
 			return nil, err
 		}
@@ -76,7 +76,7 @@ func insertDoc(db string, collection string, docReader io.Reader) (*bytes.Buffer
 	}
 
 	err = updateCollection(db, collection, func(bucket *bolt.Bucket) error {
-		return bucket.Put(lookupId.Bytes(), encDoc.Bytes())
+		return bucket.Put(lookupId, encDoc.Bytes())
 	})
 	return encDoc, err
 }
@@ -87,19 +87,19 @@ func updateDoc(db string, collection string, id string, updateReader interface{}
 		return nil, err
 	}
 
-	lookupId, err := parseId(id)
+	lookupId, err := ParseId(id)
 	if err != nil {
 		return nil, err
 	}
 
 	var encDoc *bytes.Buffer
 	err = updateCollection(db, collection, func(bucket *bolt.Bucket) error {
-		originalDoc := bucket.Get(lookupId.Bytes())
+		originalDoc := bucket.Get(lookupId)
 		encDoc, err = updateDocValue(originalDoc, update, bucket)
 		if err != nil {
 			return err
 		}
-		return bucket.Put(lookupId.Bytes(), encDoc.Bytes())
+		return bucket.Put(lookupId, encDoc.Bytes())
 	})
 	return encDoc.Bytes(), err
 }
@@ -162,14 +162,14 @@ func updateQuery(db string, collection string, queryReader io.Reader) ([]byte, e
 }
 
 func findDoc(db string, collection string, id string) ([]byte, error) {
-	lookupId, err := parseId(id)
+	lookupId, err := ParseId(id)
 	if err != nil {
 		return nil, err
 	}
 
 	var doc []byte
 	err = readCollection(db, collection, func(bucket *bolt.Bucket) error {
-		doc = bucket.Get(lookupId.Bytes())
+		doc = bucket.Get(lookupId)
 		return nil
 	})
 	return doc, err
